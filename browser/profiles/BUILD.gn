@@ -12,6 +12,7 @@ source_set("profiles") {
     "//brave/browser/tor",
     "//brave/common/tor",
     "//brave/components/brave_sync",
+    "//brave/components/brave_rewards/browser",
     "//ui/base",
   ]
 }

@@ -5,6 +5,7 @@
 #include "brave/browser/brave_content_browser_client.h"
 
 #include "base/bind.h"
+#include "base/json/json_reader.h"
 #include "base/task/post_task.h"
 #include "brave/browser/brave_browser_main_extra_parts.h"
 #include "brave/browser/brave_browser_process_impl.h"
@@ -15,6 +16,7 @@
 #include "brave/common/webui_url_constants.h"
 #include "brave/common/tor/tor_launcher.mojom.h"
 #include "brave/common/tor/switches.h"
+#include "brave/components/brave_rewards/browser/buildflags/buildflags.h"
 #include "brave/components/brave_shields/browser/brave_shields_util.h"
 #include "brave/components/brave_shields/browser/brave_shields_web_contents_observer.h"
 #include "brave/components/brave_shields/common/brave_shield_constants.h"
@@ -32,7 +34,15 @@
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/browser_url_handler.h"
 #include "content/public/browser/navigation_handle.h"
+#include "content/public/common/service_names.mojom.h"
+#include "extensions/buildflags/buildflags.h"
+#include "services/service_manager/embedder/manifest_utils.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/resource/resource_bundle.h"
+
+#if BUILDFLAG(BRAVE_REWARDS_ENABLED)
+#include "brave/components/services/bat_ledger/public/interfaces/bat_ledger.mojom.h"
+#endif
 
 using content::BrowserThread;
 using content::RenderFrameHost;
@@ -175,6 +185,10 @@ void BraveContentBrowserClient::RegisterOutOfProcessServices(
   ChromeContentBrowserClient::RegisterOutOfProcessServices(services);
   (*services)[tor::mojom::kTorLauncherServiceName] = base::BindRepeating(
     l10n_util::GetStringUTF16, IDS_UTILITY_PROCESS_TOR_LAUNCHER_NAME);
+#if BUILDFLAG(BRAVE_REWARDS_ENABLED)
+  (*services)[bat_ledger::mojom::kServiceName] = base::BindRepeating(
+    l10n_util::GetStringUTF16, IDS_UTILITY_PROCESS_LEDGER_NAME);
+#endif
 }
 
 std::unique_ptr<content::NavigationUIData>
@@ -189,6 +203,26 @@ BraveContentBrowserClient::GetNavigationUIData(
                                                    navigation_ui_data.get());
   return std::move(navigation_ui_data);
 
+}
+
+std::unique_ptr<base::Value>
+BraveContentBrowserClient::GetServiceManifestOverlay(base::StringPiece name) {
+  auto chrome_overlay =
+    ChromeContentBrowserClient::GetServiceManifestOverlay(name);
+  ui::ResourceBundle& rb = ui::ResourceBundle::GetSharedInstance();
+  int id = -1;
+  if (name == content::mojom::kBrowserServiceName)
+    id = IDR_BRAVE_CONTENT_BROWSER_MANIFEST_OVERLAY;
+  else if (name == content::mojom::kPackagedServicesServiceName)
+    id = IDR_BRAVE_CONTENT_PACKAGED_SERVICES_MANIFEST_OVERLAY;
+  else
+    return chrome_overlay;
+  base::StringPiece manifest_contents =
+    rb.GetRawDataResourceForScale(id, ui::ScaleFactor::SCALE_FACTOR_NONE);
+  auto brave_overlay = base::JSONReader::Read(manifest_contents);
+  service_manager::MergeManifestWithOverlay(brave_overlay.get(),
+      chrome_overlay.get());
+  return brave_overlay;
 }
 
 void BraveContentBrowserClient::AdjustUtilityServiceProcessCommandLine(
