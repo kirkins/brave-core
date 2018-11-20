@@ -7,6 +7,9 @@
 
 #include "base/files/file_path.h"
 #include "chrome/browser/extensions/component_loader.h"
+#include "components/prefs/pref_change_registrar.h"
+
+class BravePDFExtensionTest;
 
 namespace extensions {
 
@@ -32,8 +35,24 @@ class BraveComponentLoader : public ComponentLoader {
   void AddExtension(const std::string& id,
       const std::string& name, const std::string& public_key);
  
+  static std::string GetPdfjsExtensionId();
+  static bool IsPdfjsDisabled();
+
  private:
+  friend class ::BravePDFExtensionTest;
+  void ObserveOpenPdfExternallySetting();
+  // Callback for changes to the AlwaysOpenPdfExternally setting.
+  void UpdatePdfExtension(const std::string& pref_name);
+
+  static void SetPdfjsExtensionIdAndBase64PublicKeyForTest(
+      const std::string& id,
+      const std::string& base64_public_key);
+  static std::string g_pdfjs_extension_id_;
+  static std::string g_pdfjs_extension_base64_public_key_;
+
   Profile* profile_;
+  PrefService* profile_prefs_;
+  PrefChangeRegistrar registrar_;
   DISALLOW_COPY_AND_ASSIGN(BraveComponentLoader);
 };
 
