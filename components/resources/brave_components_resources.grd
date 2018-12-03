@@ -7,7 +7,7 @@
     <output filename="brave_components_static.pak" type="data_package" />
   </outputs>
   <release seq="1">
-    <includes>
+    <includes> 
       <!-- DO NOT PUT RESOURCES FOR SPECIFIC COMPONENTS IN THIS FILE
            create a new grd file in components/component_name/resources/ -->
       <!-- Common resources -->
@@ -66,6 +66,16 @@
       <!-- TODO: move to brave_new_tab_ui component -->
       <include name="IDR_BRAVE_PRIVATE_TAB_IMG" file="../img/newtab/private-window.svg" type="BINDATA" />
       <include name="IDR_BRAVE_PRIVATE_TAB_TOR_IMG" file="../img/newtab/private-window-tor.svg" type="BINDATA" />
+
+      <!-- WebUI sync resources -->
+      <!-- TODO: move to brave_sync/ui component -->
+      <include name="IDR_BRAVE_SYNC_ICON" file="../img/sync/sync_icon.svg" type="BINDATA" />
+      <include name="IDR_BRAVE_SYNC_ADD_ICON" file="../img/sync/sync_add_icon.svg" type="BINDATA" />
+      <include name="IDR_BRAVE_SYNC_START_ICON" file="../img/sync/sync_start.svg" type="BINDATA" />
+      <include name="IDR_BRAVE_SYNC_REMOVE_ICON" file="../img/sync/sync_remove_icon.svg" type="BINDATA" />
+      <include name="IDR_BRAVE_SYNC_MOBILE_ICON" file="../img/sync/sync_mobile.svg" type="BINDATA" />
+      <include name="IDR_BRAVE_SYNC_DESKTOP_ICON" file="../img/sync/sync_desktop.svg" type="BINDATA" />
+      <include name="IDR_BRAVE_SYNC_MOBILE_DEVICE" file="../img/sync/sync_mobile_device.png" type="BINDATA" />
     </includes>
   </release>
 </grit>

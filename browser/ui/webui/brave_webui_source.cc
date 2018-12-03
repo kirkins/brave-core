@@ -109,6 +109,16 @@ void CustomizeWebUIHTMLSource(const std::string &name, content::WebUIDataSource*
         { "2e7994eaf768ee4a99272ea96cb39849.svg", IDR_BRAVE_DONATE_BG_1 },
         { "4364e454dba7ea966b117f643832e871.svg", IDR_BRAVE_DONATE_BG_2 },
       }
+    }, {
+      std::string("bravesync"), {
+        { "1b85522b77906fee46b6f1cf07ed82c7.svg", IDR_BRAVE_SYNC_ICON },
+        { "32ad310e9aa339a2558a7eaf23b402d5.svg", IDR_BRAVE_SYNC_ADD_ICON },
+        { "aa41900e32c3896d4ec8dc0ee017ba64.svg", IDR_BRAVE_SYNC_START_ICON },
+        { "2a633b3fc5e659f5b8aba6a1375d3ee2.svg", IDR_BRAVE_SYNC_REMOVE_ICON },
+        { "e52cb330615d5c595adf82393bbc85df.svg", IDR_BRAVE_SYNC_MOBILE_ICON },
+        { "57472828c148bbfcfe670f88533be323.svg", IDR_BRAVE_SYNC_DESKTOP_ICON },
+        { "8325aa2b91c0e3e568645d967b1a378e.png", IDR_BRAVE_SYNC_MOBILE_DEVICE },
+      }
     }
   };
   AddResourcePaths(source, resources[name]);
