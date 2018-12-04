@@ -41,3 +41,30 @@ chrome.runtime.onConnect.addListener(function () {
     }
   })
 })
+
+// Detect User Tip requests via network calls
+// Twitter
+const requestFilter = {
+  urls: ['https://api.twitter.com/1.1/favorites/create.json']
+}
+async function requestCallback (details: any) {
+  if (details.method !== 'POST' || !details.requestBody || !details.requestBody.formData) {
+    console.error('Received a favorite request, but not a POST, was a ' + details.method)
+    return
+  }
+  const { formData } = details.requestBody
+  if (!formData.id || !formData.id.length) {
+    console.error('Received a favorite request, but no item ID', details.formData)
+    return
+  }
+  const tweetId = formData.id[0]
+  console.log(`Tab ${details.tabId} received a favorite request for tweet ${tweetId}`)
+  // create and notify the tab content script
+  chrome.tabs.executeScript(details.tabId, {
+    file: '/out/brave_rewards_content_twitter.bundle.js'
+  }, () => {
+    chrome.tabs.sendMessage(details.tabId, { userAction: 'USER_TIP', tweetId })
+  })
+}
+chrome.webRequest.onBeforeRequest.addListener(requestCallback, requestFilter, ['requestBody'])
+
