@@ -10,24 +10,40 @@ import { connect } from 'react-redux'
 import {
   Box,
   DisabledContent,
-  List,
-  NextContribution,
-  Tokens
 } from 'brave-ui/features/rewards'
 import { Grid, Column, Select, ControlWrapper } from 'brave-ui/components'
 
 // Utils
-import * as utils from '../utils'
 import { getLocale } from '../../../../common/locale'
 import * as rewardsActions from '../actions/rewards_actions'
 
 // Assets
 const adsDisabledIcon = require('../../img/ads_disabled.svg')
 
+interface State {
+  adsEnabled: boolean
+}
+
 interface Props extends Rewards.ComponentProps {
 }
 
-class AdsBox extends React.Component<Props, {}> {
+class AdsBox extends React.Component<Props, State> {
+  constructor(props: Props) {
+    super(props)
+    this.state = {
+      adsEnabled: false
+    }
+  }
+
+  componentDidMount () {
+    const { adsEnabled } = this.props.rewardsData.adsData
+    this.setState({ adsEnabled })
+  }
+
+  componentWillReceiveProps (nextProps: Props) {
+    const { adsEnabled } = nextProps.rewardsData.adsData
+    this.setState({ adsEnabled })
+  }
 
   adsDisabled = () => {
     return (
@@ -41,7 +57,16 @@ class AdsBox extends React.Component<Props, {}> {
   }
 
   onAdsSettingChange = (key: string, value: string) => {
-    console.log(`Setting ${key} to ${value}`)
+    let newValue: any = value
+
+    if (key === 'adsEnabled') {
+      newValue = !this.state.adsEnabled
+      this.setState({
+        adsEnabled: newValue
+      })
+    }
+
+    this.props.actions.onAdsSettingSave(key, newValue)
   }
 
   adsSettings = (enabled?: boolean) => {
@@ -80,14 +105,8 @@ class AdsBox extends React.Component<Props, {}> {
       return null
     }
 
-    // Temporary until we have such attributes
-    // const { adsEarnings, notificationsReceived, pagesViewed, paymentDate } = adsData
-    const adsEarnings = '10.0'
-    const notificationsReceived = '80'
-    const pagesViewed = '15'
-    const paymentDate = 'Monthly, 5th'
-    const { rates } = this.props.rewardsData.walletInfo
     const { adsEnabled } = adsData
+    const showEnabled = this.state.adsEnabled || adsEnabled
 
     return (
       <Box
@@ -95,35 +114,12 @@ class AdsBox extends React.Component<Props, {}> {
         type={'ads'}
         description={getLocale('adsDesc')}
         toggle={true}
-        checked={adsEnabled}
-        settingsChild={this.adsSettings(adsEnabled)}
+        checked={showEnabled}
+        settingsChild={this.adsSettings(showEnabled)}
         testId={'braveAdsSettings'}
         disabledContent={this.adsDisabled()}
-      >
-        <List title={getLocale('adsCurrentEarnings')}>
-          <Tokens
-            value={adsEarnings}
-            converted={utils.convertBalance(adsEarnings, rates)}
-          />
-        </List>
-        <List title={getLocale('adsPaymentDate')}>
-          <NextContribution>
-            {paymentDate}
-          </NextContribution>
-        </List>
-        <List title={getLocale('adsNotificationsReceived')}>
-          <Tokens
-            hideText={true}
-            value={notificationsReceived}
-          />
-        </List>
-        <List title={getLocale('adsPagesViewed')}>
-          <Tokens
-            hideText={true}
-            value={pagesViewed}
-          />
-        </List>
-      </Box>
+        onToggle={this.onAdsSettingChange.bind(this, 'adsEnabled', '')}
+      />
     )
   }
 }
