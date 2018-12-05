@@ -14,6 +14,7 @@
 #include "components/bookmarks/browser/bookmark_model.h"
 #include "components/bookmarks/browser/bookmark_storage.h"
 #include "components/bookmarks/browser/bookmark_utils.h"
+#include "components/bookmarks/browser/url_index.h"
 #include "components/bookmarks/common/bookmark_pref_names.h"
 #include "components/prefs/pref_service.h"
 #include "ui/base/models/tree_node_iterator.h"
@@ -472,7 +473,7 @@ void ValidateFolderOrders(const bookmarks::BookmarkNode* folder_node) {
       DLOG(ERROR) << "i=" << i;
       DLOG(ERROR) << "left_order=" << left_order;
       DLOG(ERROR) << "right_order=" << right_order;
-      DCHECK(false);
+      DLOG(ERROR) << "Unexpected situation of invalid order";
       return;
     }
   }
@@ -536,19 +537,18 @@ void BookmarkChangeProcessor::ApplyChangesFromSyncModel(
         const BookmarkNode* bookmark_bar = bookmark_model_->bookmark_bar_node();
         bool bookmark_bar_was_empty = bookmark_bar->empty();
 
-        // TODO(alexeyb): use manual add node/folder to avoid model's observers
-        // invocation leading "Pending bookmarks" to be shown
+        // Use manual, not bookmark_model_->AddXXX, add node/folder to avoid
+        // model's observers invocation leading "Pending bookmarks" to be shown
         if (bookmark_record.isFolder) {
-          node = bookmark_model_->AddFolder(
-                          parent_node,
-                          GetIndex(parent_node, bookmark_record),
-                          base::UTF8ToUTF16(bookmark_record.site.title));
+          node = AddFolder(parent_node,
+                           GetIndex(parent_node, bookmark_record),
+                           base::UTF8ToUTF16(bookmark_record.site.title));
           folder_was_created = true;
         } else {
-          node = bookmark_model_->AddURL(parent_node,
-                          GetIndex(parent_node, bookmark_record),
-                          base::UTF8ToUTF16(bookmark_record.site.title),
-                          GURL(bookmark_record.site.location));
+          node = AddURL(parent_node,
+                        GetIndex(parent_node, bookmark_record),
+                        base::UTF8ToUTF16(bookmark_record.site.title),
+                        GURL(bookmark_record.site.location));
         }
         if (bookmark_bar_was_empty)
           profile_->GetPrefs()->SetBoolean(bookmarks::prefs::kShowBookmarkBar,
@@ -607,9 +607,9 @@ void BookmarkChangeProcessor::CompletePendingNodesMove(
     const auto& order = std::get<1>(move_info);
     int64_t index = GetIndexByOrder(created_folder_node, order);
 
-    // TODO(alexeyb): use manual move to avoid model observer invocation
+    // Use manual move to avoid model observer invocation
     // leading "Pending bookmarks" to get shown
-    bookmark_model_->Move(node, created_folder_node, index);
+    MoveFireNodeAdded(node, created_folder_node, index);
     // Now we dont need "parent_object_id" metainfo on node, because node
     // is attached to proper parent. Note that parent can still be a child
     // of "Pending Bookmarks" note.
@@ -617,6 +617,172 @@ void BookmarkChangeProcessor::CompletePendingNodesMove(
 #ifndef NDEBUG
     ValidateFolderOrders(created_folder_node);
 #endif
+  }
+}
+
+// Helpers for special processing of pending_node
+const BookmarkNode* BookmarkChangeProcessor::AddFolder(
+    const bookmarks::BookmarkNode* parent,
+    int index,
+    const base::string16& title) {
+  if (parent->HasAncestor(GetPendingNodeRoot())) {
+    return AddFolderNoFireObservers(parent, index, title);
+  } else {
+    return bookmark_model_->AddFolder(parent, index, title);
+  }
+}
+
+const BookmarkNode* BookmarkChangeProcessor::AddURL(
+    const bookmarks::BookmarkNode* parent,
+    int index,
+    const base::string16& title,
+    const GURL& url) {
+  if (parent->HasAncestor(GetPendingNodeRoot())) {
+    return AddUrlNoFireObservers(parent, index, title, url);
+  } else {
+    return bookmark_model_->AddURL(parent, index, title, url);
+  }
+}
+
+const BookmarkNode* BookmarkChangeProcessor::AddFolderNoFireObservers(
+    const bookmarks::BookmarkNode* parent,
+    int index,
+    const base::string16& title) {
+  // BookmarkModel::AddFolderWithMetaInfo
+  if (!bookmark_model_->loaded_ || bookmark_model_->is_root_node(parent) ||
+      !bookmark_model_->IsValidIndex(parent, index, true)) {
+    // Can't add to the root.
+    NOTREACHED();
+    return nullptr;
+  }
+
+  std::unique_ptr<bookmarks::BookmarkNode> new_node =
+      std::make_unique<bookmarks::BookmarkNode>(
+          bookmark_model_->generate_next_node_id(),
+          GURL());
+  new_node->set_date_folder_modified(base::Time::Now());
+  // Folders shouldn't have line breaks in their titles.
+  new_node->SetTitle(title);
+  new_node->set_type(bookmarks::BookmarkNode::FOLDER);
+
+  // BookmarkModel::AddNode
+  bookmarks::BookmarkNode* node_ptr = new_node.get();
+  bookmark_model_->url_index_->Add(const_cast<bookmarks::BookmarkNode*>(parent),
+      index, std::move(new_node));
+
+  if (bookmark_model_->store_)
+   bookmark_model_->store_->ScheduleSave();
+
+  bookmark_model_->AddNodeToIndexRecursive(node_ptr);
+
+  // Call of observers is disabled by intent
+
+  return node_ptr;
+}
+
+const BookmarkNode* BookmarkChangeProcessor::AddUrlNoFireObservers(
+    const bookmarks::BookmarkNode* parent,
+    int index,
+    const base::string16& title,
+    const GURL& url) {
+  // BookmarkModel::AddURLWithCreationTimeAndMetaInfo
+  if (!bookmark_model_->loaded_ || !url.is_valid() ||
+      bookmark_model_->is_root_node(parent) ||
+      !bookmark_model_->IsValidIndex(parent, index, true)) {
+    NOTREACHED();
+    return nullptr;
+  }
+
+  std::unique_ptr<bookmarks::BookmarkNode> new_node =
+      std::make_unique<bookmarks::BookmarkNode>(
+          bookmark_model_->generate_next_node_id(),
+          url);
+  new_node->SetTitle(title);
+  new_node->set_date_added(base::Time::Now());
+  new_node->set_type(bookmarks::BookmarkNode::URL);
+
+  // BookmarkModel::AddNode
+  bookmarks::BookmarkNode* node_ptr = new_node.get();
+  bookmark_model_->url_index_->Add(const_cast<bookmarks::BookmarkNode*>(parent),
+      index, std::move(new_node));
+
+  if (bookmark_model_->store_)
+    bookmark_model_->store_->ScheduleSave();
+
+  bookmark_model_->AddNodeToIndexRecursive(node_ptr);
+
+  // Call of observers is disabled by intent
+
+  return node_ptr;
+}
+
+void BookmarkChangeProcessor::MoveFireNodeAdded(
+    const bookmarks::BookmarkNode* node,
+    const bookmarks::BookmarkNode* new_parent,
+    int index) {
+  // BookmarkModel::Move
+  if (!bookmark_model_->loaded_ || !node ||
+      !bookmark_model_->IsValidIndex(new_parent, index, true) ||
+      bookmark_model_->is_root_node(new_parent) ||
+      bookmark_model_->is_permanent_node(node)) {
+    NOTREACHED();
+    return;
+  }
+
+  if (new_parent->HasAncestor(node)) {
+    // Can't make an ancestor of the node be a child of the node.
+    NOTREACHED();
+    return;
+  }
+
+  const BookmarkNode* old_parent = node->parent();
+  int old_index = old_parent->GetIndexOf(node);
+
+  if (old_parent == new_parent &&
+      (index == old_index || index == old_index + 1)) {
+    // Node is already in this position, nothing to do.
+    return;
+  }
+
+  bookmark_model_->SetDateFolderModified(new_parent, base::Time::Now());
+
+  if (old_parent == new_parent && index > old_index)
+    index--;
+
+  bookmarks::BookmarkNode* mutable_old_parent =
+      const_cast<bookmarks::BookmarkNode*>(old_parent);
+  std::unique_ptr<bookmarks::BookmarkNode> owned_node =
+      mutable_old_parent->Remove(const_cast<bookmarks::BookmarkNode*>(node));
+  bookmarks::BookmarkNode* mutable_new_parent =
+      const_cast<bookmarks::BookmarkNode*>(new_parent);
+  mutable_new_parent->Add(std::move(owned_node), index);
+
+  if (bookmark_model_->store_)
+    bookmark_model_->store_->ScheduleSave();
+
+  // Call of observers is disabled by intent
+
+  if (new_parent->HasAncestor(GetPendingNodeRoot())) {
+    // Move inside of pending node
+    // don't need to call any observers
+  } else {
+    // Move into a folder outside of pending node.
+    // Emulate event the entry just was created.
+    for (bookmarks::BookmarkModelObserver& observer : bookmark_model_->observers_)
+      observer.BookmarkNodeAdded(bookmark_model_, new_parent, index);
+
+    // Emulate event the children entries were also created
+    if (node->is_folder()) {
+      ui::TreeNodeIterator<const bookmarks::BookmarkNode>
+          iterator(new_parent);
+      while (iterator.has_next()) {
+        const bookmarks::BookmarkNode* node_found = iterator.Next();
+        for (bookmarks::BookmarkModelObserver& observer : bookmark_model_->observers_) {
+          observer.BookmarkNodeAdded(bookmark_model_, node_found->parent(),
+              node_found->parent()->GetIndexOf(node_found));
+        }
+      }
+    }
   }
 }
 

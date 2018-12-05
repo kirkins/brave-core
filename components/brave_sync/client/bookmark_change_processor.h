@@ -97,6 +97,32 @@ class BookmarkChangeProcessor : public ChangeProcessor,
       const bookmarks::BookmarkNode* created_folder_node,
       const std::string& created_folder_object_id);
 
+  // Helpers for special processing of pending_node
+  // Adds a new folder node at the specified position.
+  const bookmarks::BookmarkNode* AddFolder(
+      const bookmarks::BookmarkNode* parent,
+      int index,
+      const base::string16& title);
+  // Adds a url at the specified position.
+  const bookmarks::BookmarkNode* AddURL(
+      const bookmarks::BookmarkNode* parent,
+      int index,
+      const base::string16& title,
+      const GURL& url);
+
+  const bookmarks::BookmarkNode* AddFolderNoFireObservers(
+      const bookmarks::BookmarkNode* parent,
+      int index,
+      const base::string16& title);
+  const bookmarks::BookmarkNode* AddUrlNoFireObservers(
+      const bookmarks::BookmarkNode* parent,
+      int index,
+      const base::string16& title,
+      const GURL& url);
+  void MoveFireNodeAdded(const bookmarks::BookmarkNode* node,
+                         const bookmarks::BookmarkNode* new_parent,
+                         int index);
+
   BraveSyncClient* sync_client_;  // not owned
   prefs::Prefs* sync_prefs_;  // not owned
   Profile* profile_; // not owned

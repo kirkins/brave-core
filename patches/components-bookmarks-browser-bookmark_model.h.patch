@@ -1,0 +1,23 @@
+diff --git a/components/bookmarks/browser/bookmark_model.h b/components/bookmarks/browser/bookmark_model.h
+index 2f48a65e84a9a3c4781aa7deb6cc9702ce374e16..f76357d53615b60eac4f78332a52f349ca44208e 100644
+--- a/components/bookmarks/browser/bookmark_model.h
++++ b/components/bookmarks/browser/bookmark_model.h
+@@ -41,6 +41,10 @@ namespace query_parser {
+ enum class MatchingAlgorithm;
+ }
+ 
++namespace brave_sync {
++class BookmarkChangeProcessor;
++}
++
+ namespace bookmarks {
+ 
+ class BookmarkCodecTest;
+@@ -310,6 +314,7 @@ class BookmarkModel : public BookmarkUndoProvider,
+   void SetUndoDelegate(BookmarkUndoDelegate* undo_delegate);
+ 
+  private:
++  friend class brave_sync::BookmarkChangeProcessor;
+   friend class BookmarkCodecTest;
+   friend class BookmarkModelFaviconTest;
+   friend class BookmarkStorage;
