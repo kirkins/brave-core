@@ -18,6 +18,7 @@
 #include "components/bookmarks/browser/bookmark_model.h"
 #include "components/bookmarks/browser/bookmark_utils.h"
 #include "components/bookmarks/common/bookmark_pref_names.h"
+#include "components/bookmarks/test/mock_bookmark_model_observer.h"
 #include "components/bookmarks/test/test_bookmark_client.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/test/test_browser_thread_bundle.h"
@@ -1129,5 +1130,77 @@ TEST_F(BraveBookmarkChangeProcessorTest, ItemAheadOfFolderRequireStrictSorting) 
   const auto* node_a = folder3->GetChild(0);
   EXPECT_EQ(node_a->url().spec(), "https://a.com/");
   const auto* node_b = folder3->GetChild(1);
+  EXPECT_EQ(node_b->url().spec(), "https://b.com/");
+}
+
+TEST_F(BraveBookmarkChangeProcessorTest, ItemAheadOfFolderObservers) {
+  // Create these:
+  // Other
+  //    Folder1
+  //      a.com
+  //      b.com
+  // With a broken sequence
+  // Then verify observers are properly called
+
+  bookmarks::MockBookmarkModelObserver observer;
+  model()->AddObserver(&observer);
+
+  change_processor()->Start();
+
+  auto folder1_record = SimpleFolderSyncRecord(
+      jslib::SyncRecord::Action::A_CREATE,
+      "Folder1",
+      "1.1.1.1",
+      "", true, "");
+
+  auto a_record = SimpleBookmarkSyncRecord(
+      jslib::SyncRecord::Action::A_CREATE,
+      "",
+      "https://a.com/",
+      "A.com - title",
+      "1.1.1.1.1.1.1",
+      folder1_record->objectId);
+
+  auto b_record = SimpleBookmarkSyncRecord(
+      jslib::SyncRecord::Action::A_CREATE,
+      "",
+      "https://b.com/",
+      "B.com - title",
+      "1.1.1.1.1.1.2",
+      folder1_record->objectId);
+
+  RecordsList records;
+  records.push_back(std::move(a_record));
+  records.push_back(std::move(b_record));
+
+  {
+    EXPECT_CALL(observer, BookmarkNodeAdded(model(), _, _)).Times(0);
+    change_processor()->ApplyChangesFromSyncModel(records);
+  }
+
+  // Verify the model, for now we should not find anything
+  EXPECT_EQ(model()->GetMostRecentlyAddedUserNodeForURL(GURL("https://a.com/")),
+      nullptr);
+  EXPECT_EQ(model()->GetMostRecentlyAddedUserNodeForURL(GURL("https://b.com/")),
+      nullptr);
+
+  RecordsList records2;
+  records2.push_back(std::move(folder1_record));
+  {
+    EXPECT_CALL(observer, BookmarkNodeAdded(model(), _, _)).Times(3);
+    change_processor()->ApplyChangesFromSyncModel(records2);
+  }
+
+  model()->RemoveObserver(&observer);
+
+  // Verify the model, now we should find the folder and the nodes
+  ASSERT_EQ(model()->other_node()->child_count(), 1);
+  const auto* folder1 = model()->other_node()->GetChild(0);
+  EXPECT_EQ(base::UTF16ToUTF8(folder1->GetTitle()), "Folder1");
+
+  ASSERT_EQ(folder1->child_count(), 2);
+  const auto* node_a = folder1->GetChild(0);
+  EXPECT_EQ(node_a->url().spec(), "https://a.com/");
+  const auto* node_b = folder1->GetChild(1);
   EXPECT_EQ(node_b->url().spec(), "https://b.com/");
 }
