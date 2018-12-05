@@ -46,7 +46,7 @@ class ContributeBox extends React.Component<Props, State> {
         faviconUrl = `chrome://favicon/size/48@1x/${item.favIcon}`
       }
 
-      return {
+      if (item.percentage > 0.5) return {
         profile: {
           name: item.name,
           verified: item.verified,
